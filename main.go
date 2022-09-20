@@ -6,20 +6,56 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strconv"
 )
 
-var lstProjects = []Project{}
+var LstProjects = []Project{}
+var URL, Token string
 
-func main() {
-	var url, token string
-	fmt.Println("---------- 初始化设置 ----------")
-	fmt.Println("a. 请输入GitLab URL，如：https://jihulab.com")
-	fmt.Scanln(&url)
+// 预设Label
+var LstLabels = []Label{
+	{
+		Name:  "QC::并发多线程",
+		Color: "#009966",
+	},
+	{
+		Name:  "QC::服务接口定义",
+		Color: "#8fbc8f",
+	},
+	{
+		Name:  "QC::健壮性",
+		Color: "#013220",
+	},
+	{
+		Name:  "QC::日志",
+		Color: "#6699cc",
+	},
+	{
+		Name:  "QC::性能",
+		Color: "#0000ff",
+	},
+	{
+		Name:  "QC::异常",
+		Color: "#e6e6fa",
+	},
+	{
+		Name:  "QC::规范类",
+		Color: "#9400d3",
+	},
+	{
+		Name:  "QC::安全编码",
+		Color: "#ff0000",
+	},
+	{
+		Name:  "QC::其他",
+		Color: "#eee600",
+	},
+}
 
-	fmt.Println("b. 请输入GitLab Access Token")
-	fmt.Scanln(&token)
-	ShowMenu(url, token)
+type Label struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }
 
 type Project struct {
@@ -44,92 +80,104 @@ type Rule struct {
 	BranchIDs []int  `json:"protected_branch_ids"`
 }
 
-func ShowMenu(url, token string) {
+func main() {
+	fmt.Print("\033[H\033[2J")
+	fmt.Println("---------- 初始化设置 ----------")
+	fmt.Println("a. 请输入GitLab URL，如：https://jihulab.com")
+	fmt.Scanln(&URL)
+	fmt.Println("b. 请输入GitLab Access Token")
+	fmt.Scanln(&Token)
+	SetGroupID()
+}
+
+func SetGroupID() {
+	LstProjects = []Project{}
+	var group_id int
+	fmt.Print("\033[H\033[2J")
+	fmt.Println("---------- 群组设置 ----------")
+	fmt.Println("a. 请输入群组ID")
+	fmt.Scanln(&group_id)
+	GetProjectsByGroupID(group_id)
+	fmt.Println("该群组下的项目有【" + strconv.Itoa(len(LstProjects)) + "】个：")
+	for _, v := range LstProjects {
+		fmt.Println(strconv.Itoa(v.ID) + " : " + v.Name)
+	}
+	fmt.Println("按任意键继续")
+	fmt.Scanln()
+	ShowMenu(group_id)
+}
+
+func ShowMenu(group_id int) {
 	var protect_branch_name, approval_rule_name string
-	var group_id, push_access_level, merge_access_level, approval_required int
+	var push_access_level, merge_access_level, approval_required int
 	var approval_group_ids []int
 
 	for true {
-		lstProjects = []Project{}
 		fmt.Print("\033[H\033[2J")
+		fmt.Println("【群组】 " + strconv.Itoa(group_id))
 		fmt.Println("---------- 菜单 ----------")
-		fmt.Println("1. 设置群组保护分支")
-		fmt.Println("2. 设置群组审批规则")
-		fmt.Println("3. 设置群组合并检查：需解决所有讨论")
-		fmt.Println("4. 退出")
+		fmt.Println("1. 设置保护分支")
+		fmt.Println("2. 设置审批规则")
+		fmt.Println("3. 设置合并检查：需解决所有讨论")
+		fmt.Println("4. 设置Label")
+		fmt.Println("5. 返回上一级")
+		fmt.Println("6. 退出")
 		fmt.Println("\n请输入功能编号：")
 		var choose int
 		fmt.Scanln(&choose)
 		switch choose {
 		case 1:
-			fmt.Println("a. 请输入需要进行设置的群组ID")
-			fmt.Scanln(&group_id)
-			GetProjectsByGroupID(url, token, group_id)
-			fmt.Println("该群组下的项目有：")
-			for _, v := range lstProjects {
-				fmt.Println(strconv.Itoa(v.ID) + " : " + v.Name)
-			}
-			fmt.Println("b. 请输入保护分支名称或规则，如main、*-stable")
+			fmt.Println("a. 请输入保护分支名称或规则，如main、*-stable")
 			fmt.Scanln(&protect_branch_name)
-			fmt.Println("c. 请输入允许推送的人员类型：0 => No access, 30 => Developer access, 40 => Maintainer access, 60 => Admin access")
+			fmt.Println("b. 请输入允许推送的人员类型：0 => No access, 30 => Developer access, 40 => Maintainer access, 60 => Admin access")
 			fmt.Scanln(&push_access_level)
-			fmt.Println("d. 请输入允许合并的人员类型：0 => No access, 30 => Developer access, 40 => Maintainer access, 60 => Admin access")
+			fmt.Println("c. 请输入允许合并的人员类型：0 => No access, 30 => Developer access, 40 => Maintainer access, 60 => Admin access")
 			fmt.Scanln(&merge_access_level)
-			SetProtectBranch(url, token, protect_branch_name, push_access_level, merge_access_level)
+			SetProtectBranch(protect_branch_name, push_access_level, merge_access_level)
 		case 2:
-			fmt.Println("a. 请输入需要进行设置的群组ID")
-			fmt.Scanln(&group_id)
-			GetProjectsByGroupID(url, token, group_id)
-			fmt.Println("该群组下的项目有：")
-			for _, v := range lstProjects {
-				fmt.Println(strconv.Itoa(v.ID) + " : " + v.Name)
-			}
-			fmt.Println("b. 请输入审批规则名称，如开发组、审核组")
+			fmt.Println("a. 请输入审批规则名称，如开发组、审核组")
 			fmt.Scanln(&approval_rule_name)
-			fmt.Println("c. 请输入审批组ID")
+			fmt.Println("b. 请输入审批组ID")
 			var approval_group_id int
 			fmt.Scanln(&approval_group_id)
 			approval_group_ids = append(approval_group_ids, approval_group_id)
-			fmt.Println("d. 请输入最小核准人数")
+			fmt.Println("c. 请输入最小核准人数")
 			fmt.Scanln(&approval_required)
-			fmt.Println("e. 请输入规则生效的保护分支名,如main、*-stable，留空则为所有分支")
+			fmt.Println("d. 请输入规则生效的保护分支名,如main、*-stable，留空则为所有分支")
 			protect_branch_name = ""
 			fmt.Scanln(&protect_branch_name)
-			SetApprovalRules(url, token, approval_rule_name, approval_group_ids, approval_required, protect_branch_name)
+			SetApprovalRules(approval_rule_name, approval_group_ids, approval_required, protect_branch_name)
 		case 3:
-			fmt.Println("a. 请输入需要进行设置的群组ID")
-			fmt.Scanln(&group_id)
-			GetProjectsByGroupID(url, token, group_id)
-			fmt.Println("该群组下的项目有：")
-			for _, v := range lstProjects {
-				fmt.Println(strconv.Itoa(v.ID) + " : " + v.Name)
-			}
 		INPUT:
-			fmt.Println("b. 是否开启合并检查：需解决所有讨论（true/false）")
+			fmt.Println("a. 是否开启合并检查：需解决所有讨论（true/false）")
 			var isAllTreadResolved string
 			fmt.Scanln(&isAllTreadResolved)
 			if isAllTreadResolved == "true" || isAllTreadResolved == "false" {
-				SetMergeCheck_AllTreadResolved(url, token, isAllTreadResolved)
+				SetMergeCheck_AllTreadResolved(isAllTreadResolved)
 			} else {
 				goto INPUT
 			}
 		case 4:
-			return
+			SetLabels(group_id, LstLabels)
+		case 5:
+			SetGroupID()
+		case 6:
+			os.Exit(0)
 		}
 		fmt.Println("按任意键返回")
 		fmt.Scanln()
 	}
 }
 
-func GetProjectsByGroupID(url string, token string, group_id int) {
+func GetProjectsByGroupID(group_id int) {
 	client := &http.Client{}
 
 	// Get SubGroups
 	lstGroups := []Group{}
 	page := 1
 GroupPagination:
-	req, _ := http.NewRequest("GET", url+"/api/v4/groups/"+strconv.Itoa(group_id)+"/subgroups?per_page=100&page="+strconv.Itoa(page), nil)
-	req.Header.Add("PRIVATE-TOKEN", token)
+	req, _ := http.NewRequest("GET", URL+"/api/v4/groups/"+strconv.Itoa(group_id)+"/subgroups?per_page=100&page="+strconv.Itoa(page), nil)
+	req.Header.Add("PRIVATE-TOKEN", Token)
 	resp, _ := client.Do(req)
 	body, _ := ioutil.ReadAll(resp.Body)
 	groups := []Group{}
@@ -145,14 +193,14 @@ GroupPagination:
 	}
 	for _, v := range lstGroups {
 		// Recursion
-		GetProjectsByGroupID(url, token, v.ID)
+		GetProjectsByGroupID(v.ID)
 	}
 
 	// Get Projects
 	page = 1
 ProjectPagination:
-	req, _ = http.NewRequest("GET", url+"/api/v4/groups/"+strconv.Itoa(group_id)+"/projects?per_page=100&page="+strconv.Itoa(page), nil)
-	req.Header.Add("PRIVATE-TOKEN", token)
+	req, _ = http.NewRequest("GET", URL+"/api/v4/groups/"+strconv.Itoa(group_id)+"/projects?per_page=100&page="+strconv.Itoa(page), nil)
+	req.Header.Add("PRIVATE-TOKEN", Token)
 	resp, _ = client.Do(req)
 	body, _ = ioutil.ReadAll(resp.Body)
 	projects := []Project{}
@@ -163,18 +211,18 @@ ProjectPagination:
 	}
 	if len(projects) > 0 {
 		page++
-		lstProjects = append(lstProjects, projects...)
+		LstProjects = append(LstProjects, projects...)
 		goto ProjectPagination
 	}
 }
 
-func SetProtectBranch(url string, token string, protect_branch_name string, push_access_level int, merge_access_level int) {
+func SetProtectBranch(protect_branch_name string, push_access_level int, merge_access_level int) {
 	client := &http.Client{}
-	for _, v := range lstProjects {
-		req, _ := http.NewRequest("POST", url+"/api/v4/projects/"+strconv.Itoa(v.ID)+
+	for _, v := range LstProjects {
+		req, _ := http.NewRequest("POST", URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+
 			"/protected_branches?name="+protect_branch_name+"&push_access_level="+strconv.Itoa(push_access_level)+
 			"&merge_access_level="+strconv.Itoa(merge_access_level), nil)
-		req.Header.Add("PRIVATE-TOKEN", token)
+		req.Header.Add("PRIVATE-TOKEN", Token)
 		resp, _ := client.Do(req)
 
 		if resp.StatusCode != 201 {
@@ -187,14 +235,14 @@ func SetProtectBranch(url string, token string, protect_branch_name string, push
 	fmt.Println("设置群组保护分支成功！")
 }
 
-func SetApprovalRules(url string, token string, approval_rule_name string, approval_group_ids []int, approval_required int, protect_branch_name string) {
+func SetApprovalRules(approval_rule_name string, approval_group_ids []int, approval_required int, protect_branch_name string) {
 	client := &http.Client{}
-	for _, v := range lstProjects {
+	for _, v := range LstProjects {
 		var protected_branch_ids []int
 		if protect_branch_name != "" {
 			// Get protected branches
-			req, _ := http.NewRequest("GET", url+"/api/v4/projects/"+strconv.Itoa(v.ID)+"/protected_branches", nil)
-			req.Header.Add("PRIVATE-TOKEN", token)
+			req, _ := http.NewRequest("GET", URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+"/protected_branches", nil)
+			req.Header.Add("PRIVATE-TOKEN", Token)
 			resp, _ := client.Do(req)
 			body, _ := ioutil.ReadAll(resp.Body)
 
@@ -224,9 +272,9 @@ func SetApprovalRules(url string, token string, approval_rule_name string, appro
 			fmt.Println(err)
 			return
 		}
-		req, _ := http.NewRequest("POST", url+"/api/v4/projects/"+strconv.Itoa(v.ID)+
+		req, _ := http.NewRequest("POST", URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+
 			"/approval_rules", bytes.NewBuffer(json))
-		req.Header.Add("PRIVATE-TOKEN", token)
+		req.Header.Add("PRIVATE-TOKEN", Token)
 		req.Header.Add("Content-Type", "application/json")
 		resp, _ := client.Do(req)
 
@@ -240,11 +288,11 @@ func SetApprovalRules(url string, token string, approval_rule_name string, appro
 	fmt.Println("设置群组审批规则成功！")
 }
 
-func SetMergeCheck_AllTreadResolved(url, token, isAllTreadResolved string) {
+func SetMergeCheck_AllTreadResolved(isAllTreadResolved string) {
 	client := &http.Client{}
-	for _, v := range lstProjects {
-		req, _ := http.NewRequest("PUT", url+"/api/v4/projects/"+strconv.Itoa(v.ID)+"?only_allow_merge_if_all_discussions_are_resolved="+isAllTreadResolved, nil)
-		req.Header.Add("PRIVATE-TOKEN", token)
+	for _, v := range LstProjects {
+		req, _ := http.NewRequest("PUT", URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+"?only_allow_merge_if_all_discussions_are_resolved="+isAllTreadResolved, nil)
+		req.Header.Add("PRIVATE-TOKEN", Token)
 		resp, _ := client.Do(req)
 
 		if resp.StatusCode != 200 {
@@ -255,5 +303,30 @@ func SetMergeCheck_AllTreadResolved(url, token, isAllTreadResolved string) {
 		}
 	}
 	fmt.Println("设置群组合并检查成功！")
+
+}
+
+func SetLabels(group_id int, LstLabels []Label) {
+	client := &http.Client{}
+
+	for _, v := range LstLabels {
+		json, err := json.Marshal(v)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		req, _ := http.NewRequest("POST", URL+"/api/v4/groups/"+strconv.Itoa(group_id)+"/labels", bytes.NewBuffer(json))
+		req.Header.Add("PRIVATE-TOKEN", Token)
+		req.Header.Add("Content-Type", "application/json")
+		resp, _ := client.Do(req)
+
+		if resp.StatusCode != 201 {
+			fmt.Println("设置群组Label失败！")
+			body, _ := ioutil.ReadAll(resp.Body)
+			fmt.Println("StatusCode: " + strconv.Itoa(resp.StatusCode) + "\nBody: " + string(body))
+			return
+		}
+	}
+	fmt.Println("设置群组Label成功！")
 
 }
