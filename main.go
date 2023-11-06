@@ -80,6 +80,24 @@ type Rule struct {
 	BranchIDs []int  `json:"protected_branch_ids"`
 }
 
+type PushRule struct {
+	commit_committer_check bool `json:"commit_committer_check"`
+	// TODO filed not exist in response
+	commit_committer_name_check bool `json:"commit_committer_name_check"`
+	reject_unsigned_commits     bool `json:"reject_unsigned_commits"`
+	// TODO filed not exist in response
+	reject_non_dco_commits        bool   `json:"reject_non_dco_commits"`
+	deny_delete_tag               bool   `json:"deny_delete_tag"`
+	member_check                  bool   `json:"member_check"`
+	prevent_secrets               bool   `json:"prevent_secrets"`
+	commit_message_regex          string `json:"commit_message_regex"`
+	commit_message_negative_regex string `json:"commit_message_negative_regex"`
+	branch_name_regex             string `json:"branch_name_regex"`
+	author_email_regex            string `json:"author_email_regex"`
+	file_name_regex               string `json:"file_name_regex"`
+	max_file_size                 int    `json:"max_file_size"`
+}
+
 func main() {
 	fmt.Print("\033[H\033[2J")
 	fmt.Println("---------- 初始化设置 ----------")
@@ -120,8 +138,9 @@ func ShowMenu(group_id int) {
 		fmt.Println("2. 设置审批规则")
 		fmt.Println("3. 设置合并检查：需解决所有讨论")
 		fmt.Println("4. 设置Label")
-		fmt.Println("5. 返回上一级")
-		fmt.Println("6. 退出")
+		fmt.Println("5. 下发群组推送规则到项目")
+		fmt.Println("98. 返回上一级")
+		fmt.Println("99. 退出")
 		fmt.Println("\n请输入功能编号：")
 		var choose int
 		fmt.Scanln(&choose)
@@ -160,8 +179,10 @@ func ShowMenu(group_id int) {
 		case 4:
 			SetLabels(group_id, LstLabels)
 		case 5:
+			SyncGroupPushRuleToProjects(group_id)
+		case 98:
 			SetGroupID()
-		case 6:
+		case 99:
 			os.Exit(0)
 		}
 		fmt.Println("按任意键返回")
@@ -329,4 +350,39 @@ func SetLabels(group_id int, LstLabels []Label) {
 	}
 	fmt.Println("设置群组Label成功！")
 
+}
+
+func SyncGroupPushRuleToProjects(group_id int) {
+	client := &http.Client{}
+
+	req, _ := http.NewRequest("GET", URL+"/api/v4/groups/"+strconv.Itoa(group_id)+"/push_rule", nil)
+	req.Header.Add("PRIVATE-TOKEN", Token)
+	resp, _ := client.Do(req)
+	body, _ := ioutil.ReadAll(resp.Body)
+	pushRule := PushRule{}
+	err := json.Unmarshal(body, &pushRule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(pushRule.reject_unsigned_commits)
+	pushRule.reject_unsigned_commits = true
+	fmt.Println(pushRule.reject_unsigned_commits)
+
+	fmt.Println(pushRule.commit_message_regex)
+	for _, v := range LstProjects {
+		fmt.Println("项目" + v.Name + "设置中...")
+		req, _ := http.NewRequest("PUT", URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+"/push_rule", bytes.NewBuffer(body))
+		req.Header.Add("PRIVATE-TOKEN", Token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, _ := client.Do(req)
+
+		if resp.StatusCode != 200 {
+			fmt.Println("设置失败！")
+			errBody, _ := ioutil.ReadAll(resp.Body)
+			fmt.Println("StatusCode: " + strconv.Itoa(resp.StatusCode) + "\nBody: " + string(errBody))
+			return
+		}
+	}
+	fmt.Println("设置成功！")
 }
