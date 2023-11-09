@@ -372,12 +372,24 @@ func SyncGroupPushRuleToProjects(group_id int) {
 	fmt.Println(pushRule.commit_message_regex)
 	for _, v := range LstProjects {
 		fmt.Println("项目" + v.Name + "设置中...")
-		req, _ := http.NewRequest("PUT", URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+"/push_rule", bytes.NewBuffer(body))
+		req1, _ := http.NewRequest("GET", URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+"/push_rule", bytes.NewBuffer(body))
+		req1.Header.Add("PRIVATE-TOKEN", Token)
+		req1.Header.Set("Content-Type", "application/json")
+		resp1, _ := client.Do(req1)
+		body1, _ := ioutil.ReadAll(resp1.Body)
+		var httpMethod = "PUT"
+		// 如果项目没有设置推送规则，则使用POST进行创建
+		if string(body1) == "null" {
+			httpMethod = "POST"
+		}
+
+		req, _ := http.NewRequest(httpMethod, URL+"/api/v4/projects/"+strconv.Itoa(v.ID)+"/push_rule", bytes.NewBuffer(body))
 		req.Header.Add("PRIVATE-TOKEN", Token)
 		req.Header.Set("Content-Type", "application/json")
 		resp, _ := client.Do(req)
 
-		if resp.StatusCode != 200 {
+		// 现场发现返回了 200、201
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
 			fmt.Println("设置失败！")
 			errBody, _ := ioutil.ReadAll(resp.Body)
 			fmt.Println("StatusCode: " + strconv.Itoa(resp.StatusCode) + "\nBody: " + string(errBody))
