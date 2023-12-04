@@ -10,4 +10,4 @@
 5. 群组设置推送规则
 
 ### 效果展示
-![](https://jihulab.com/rang.wu/jh-gitlab-group-level-setting-tool/-/raw/main/Images/img1.gif)
+![](/Images/img1.gif)
